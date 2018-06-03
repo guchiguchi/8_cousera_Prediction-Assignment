@@ -1,0 +1,146 @@
+---
+title: "Prediction Assignment"
+author: "guchiguchi"
+date: "2018/5/19"
+output: html_document
+---
+
+###libraries
+```{r message=FALSE}
+library(tidyverse)
+library(caret)
+library(rattle)
+```
+  
+#check and preparing data
+  
+  load csv file
+```{r message=FALSE}
+pml_training <- read_csv("https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv", 
+    na = "0")
+pml_testing <- read_csv("https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv", 
+    na = "0")
+```
+  
+  check dimention
+```{r}
+dim(pml_training); dim(pml_testing)
+```
+  
+```{r}
+pml_training %>% count(user_name, classe)
+```
+  
+
+  check na's
+```{r}
+count_na <- function(x){
+  x %>% is.na() %>% sum() 
+}
+data.frame(NA_count = sapply(pml_training,FUN = count_na), class = sapply(pml_training, class)) -> data_class
+data_class %>% count(class)
+```
+
+  convert class character to numeric(7:159)
+```{r message=FALSE, warning=FALSE}
+ix <- 7:150
+pml_training[ix] <- sapply(pml_training[ix], as.numeric)
+```
+  
+  
+  
+  Training data separate training and test.
+  
+  We do not need 
+  "X1", "user_name", "raw_timestamp_part_1", "raw_timestamp_part_2", "cvtd_timestamp"
+  
+  Delete them.
+  
+```{r}
+pml_training <-  pml_training[,6:160]
+#pml_training$classe <- as.factor(pml_training$classe)
+```
+  
+  create training and testing data.
+```{r}
+set.seed(20180520)
+inTrain <- createDataPartition(y = pml_training$classe, p=0.7, list=FALSE)
+training_training <- pml_training[inTrain,]
+training_testing <- pml_training[-inTrain,]
+```
+  
+  train by rapart.
+```{r}
+training_training %>% mutate_all(funs(ifelse(is.na(.),0,.))) -> training_NaToZero
+training_testing %>% mutate_all(funs(ifelse(is.na(.),0,.))) -> testing_NaToZero
+
+mod_rapart <- train(data = training_NaToZero,
+              classe ~.,
+              method = "rpart")
+
+print(mod_rapart$finalModel)
+```
+  file:///Users/aa575274/Documents/cousera/courses/08_PracticalMachineLearning/019predictingWithTrees/index.html#15
+  
+  
+```{r}
+fancyRpartPlot(mod_rapart$finalModel)
+```
+  
+  
+  
+  train by randomforest.
+```{r}
+mod_rf <- train(data = training_NaToZero,
+              classe ~.,
+              trControl = trainControl(method="oob"), method = "rf")
+
+# mod_gam <- train(data = a,
+#               classe ~.,
+#               method = "gam")
+
+#xgboost
+# mod_xgt <- train(data = a,
+#               classe ~.,
+#               method = "xgbTree")
+# 
+# mod_xgl <- train(data = a,
+#               classe ~.,
+#               method = "xgbLinear")
+
+```
+  
+  
+#check prediction
+
+```{r}
+pred_rpar <- predict(mod_rapart, newdata = testing_NaToZero)
+pred_rf <- predict(mod_rf, newdata = testing_NaToZero)
+```
+  
+  
+  
+```{r}
+confusionMatrix(data = pred_rpar, testing_NaToZero$classe %>% as.factor())
+confusionMatrix(data = pred_rf, testing_NaToZero$classe %>% as.factor())
+```
+  
+  Random forest is good model
+  
+
+#check testing data and answer the Course Project Prediction Quiz
+  
+  prepare pml_testing data
+```{r message=FALSE, warning=FALSE}
+ix <- 7:150
+pml_testing[ix] <- sapply(pml_testing[ix], as.numeric)
+pml_testing <-  pml_testing[,6:160]
+pml_testing  %>% mutate_all(funs(ifelse(is.na(.),0,.))) -> pml_testing_NaToZero
+```
+  
+  predict Course Project Prediction Quiz
+```{r}
+pred_rf_test <- predict(mod_rf, newdata = pml_testing_NaToZero)
+pred_rf_test
+```
+ 
